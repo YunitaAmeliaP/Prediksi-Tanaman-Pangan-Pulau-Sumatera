@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-df = pd.read_csv('/content/Data_tanaman_pangan_Sumatera.csv')
+df = pd.read_csv('Data_tanaman_pangan_Sumatera.csv')
+
 
 df
 
