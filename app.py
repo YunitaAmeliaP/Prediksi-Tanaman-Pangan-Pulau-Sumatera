@@ -1,4 +1,7 @@
-Prediksi Hasil Panen Tanaman pangan di pulau Sumatera
+import streamlit as st
+
+st.title("Prediksi Hasil Panen Tanaman Pangan di Pulau Sumatera")
+
 
 import pandas as pd
 import matplotlib.pyplot as plt
