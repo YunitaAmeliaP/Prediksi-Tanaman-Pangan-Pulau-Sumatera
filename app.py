@@ -1,63 +1,94 @@
+# app.py
 import streamlit as st
+import pandas as pd
 import numpy as np
-import joblib
+import matplotlib.pyplot as plt
 from tensorflow.keras.models import load_model
+import tensorflow as tf
+from sklearn.preprocessing import StandardScaler
 
-# Load model dan scaler
-xtr = joblib.load("model_xtr.pkl")
-scaler = joblib.load("scaler.pkl")
-ann_model = load_model("model_ann.h5")
+# Load model
+model = load_model("model_produksi_tanaman.h5")
+model.save("model_saved_format.h5")
+model = tf.keras.models.load_model("model_saved_format.h5")
 
 # Judul aplikasi
-st.set_page_config(page_title="Prediksi Hasil Panen", layout="centered")
-st.title("🌾 Prediksi Hasil Panen Tanaman Pangan di Sumatera")
+st.title("Prediksi Produksi Tanaman Pangan di Sumatera")
 
-st.markdown("Masukkan data untuk memprediksi hasil panen berdasarkan model Machine Learning.")
+st.markdown("""
+Aplikasi ini memprediksi **Produksi Tanaman** berdasarkan fitur-fitur input seperti Provinsi, Item, dan variabel lainnya.
+""")
 
-# Input dari user
-luas_panen = st.number_input("📐 Luas Panen (ha)", value=1400.0)
-curah_hujan = st.number_input("🌧️ Curah Hujan (mm)", value=100.0)
-suhu = st.number_input("🌡️ Suhu Rata-rata (°C)", value=27.0)
-belanja = st.number_input("💰 Belanja Pertanian (Rp)", value=300000.0)
+# Load dan olah dataset dummy (untuk ambil fitur one-hot)
+@st.cache_data
+def load_data():
+    df = pd.read_csv("Data_tanaman_pangan_Sumatera.csv")
+    df_one = pd.get_dummies(df, columns=['Provinsi', 'Item'], prefix=['Provinsi', 'Item'])
+    df_one = df_one.drop(columns=['Tahun', 'Produksi'])  # Drop target dan tahun
+    return df, df_one
 
-provinsi = st.selectbox("📍 Provinsi", [
-    "Aceh", "Bengkulu", "Jambi", "Kepulauan Bangka Belitung", 
-    "Kepulauan Riau", "Lampung", "Riau", "Sumatera Barat", 
-    "Sumatera Selatan", "Sumatera Utara"
-])
+df_raw, df_one_template = load_data()
+provinsi_options = df_raw['Provinsi'].unique()
+item_options = df_raw['Item'].unique()
 
-komoditas = st.selectbox("🌱 Komoditas", [
-    "Jagung", "Kacang Tanah", "Kedelai", "Ubi Jalar", "Ubi Kayu"
-])
+# Input pengguna
+provinsi = st.selectbox("Pilih Provinsi", provinsi_options)
+item = st.selectbox("Pilih Komoditas", item_options)
+luas_panen = st.number_input("Masukkan Luas Panen (ha):", min_value=0.0)
+hasil_per_ha = st.number_input("Masukkan Hasil per Hektar (ku/ha):", min_value=0.0)
 
-# One-hot encoding untuk provinsi dan komoditas
-provinsi_list = ["Aceh", "Bengkulu", "Jambi", "Kepulauan Bangka Belitung", 
-                 "Kepulauan Riau", "Lampung", "Riau", "Sumatera Barat", 
-                 "Sumatera Selatan", "Sumatera Utara"]
-komoditas_list = ["Jagung", "Kacang Tanah", "Kedelai", "Ubi Jalar", "Ubi Kayu"]
+# Tombol prediksi
+if st.button("Prediksi Produksi"):
+    # Siapkan dataframe input
+    input_df = pd.DataFrame(columns=df_one_template.columns)
+    input_data = {
+        'Luas Panen (Ha)': luas_panen,
+        'Hasil (Ku/Ha)': hasil_per_ha
+    }
 
-prov_oh = [1 if p == provinsi else 0 for p in provinsi_list]
-komoditas_oh = [1 if k == komoditas else 0 for k in komoditas_list]
+    for col in df_one_template.columns:
+        if col.startswith("Provinsi_"):
+            input_data[col] = 1 if col == f"Provinsi_{provinsi}" else 0
+        elif col.startswith("Item_"):
+            input_data[col] = 1 if col == f"Item_{item}" else 0
+        elif col not in input_data:
+            input_data[col] = 0  # default 0
 
-# Gabungkan semua fitur
-fitur = np.array([[luas_panen, curah_hujan, suhu, belanja] + prov_oh + komoditas_oh])
+    input_df.loc[0] = input_data
 
-# Standarisasi fitur
-fitur_scaled = scaler.transform(fitur)
+    # Scaling data (gunakan scaler yang sama dengan pelatihan)
+    scaler_X = StandardScaler()
+    scaler_X.fit(df_one_template)  # Fit ke seluruh template fitur
 
-# Prediksi
-if st.button("🔍 Prediksi Hasil Panen"):
-    # Extra Trees
-    pred_xtr = xtr.predict(fitur_scaled)
-    pred_xtr = scaler.inverse_transform(pred_xtr.reshape(-1, 1))[0][0]
+    X_scaled = scaler_X.transform(input_df)
 
-    # ANN
-    pred_ann = ann_model.predict(fitur_scaled.astype('float32'))
-    pred_ann = scaler.inverse_transform(pred_ann)[0][0]
+    # Prediksi
+    pred_scaled = model.predict(X_scaled)
 
-    # Tampilkan hasil
-    st.success(f" Prediksi Produksi (Extra Trees): **{pred_xtr:,.2f} Ton**")
-    st.success(f" Prediksi Produksi (ANN): **{pred_ann:,.2f} Ton**")
+    # Kembalikan skala jika target juga diskalakan
+    scaler_y = StandardScaler()
+    y_raw = df_raw['Produksi'].values.reshape(-1, 1)
+    scaler_y.fit(y_raw)
+    y_pred = scaler_y.inverse_transform(pred_scaled)
 
-    st.caption("Model dibuat menggunakan data tanaman pangan di Pulau Sumatera.")
+    # Tampilkan hasil prediksi
+    st.success(f"Prediksi Produksi: {y_pred[0][0]:,.2f} kuintal")
 
+    # Ambil data aktual untuk provinsi dan komoditas
+    df_filtered = df_raw[(df_raw['Provinsi'] == provinsi) & (df_raw['Item'] == item)]
+
+    if not df_filtered.empty:
+        produksi_aktual = df_filtered['Produksi'].mean()  # Ambil rata-rata produksi sebagai representasi
+
+        # Plot aktual vs prediksi
+        fig, ax = plt.subplots()
+        ax.bar(['Aktual', 'Prediksi'], [produksi_aktual, y_pred[0][0]], color=['blue', 'green'])
+        ax.set_ylabel('Produksi (kuintal)')
+        ax.set_title(f"Produksi Aktual vs Prediksi\n{item} di {provinsi}")
+
+        for i, v in enumerate([produksi_aktual, y_pred[0][0]]):
+            ax.text(i, v + max([produksi_aktual, y_pred[0][0]]) * 0.01, f"{v:,.2f}", ha='center')
+
+        st.pyplot(fig)
+    else:
+        st.warning("Data aktual tidak tersedia untuk kombinasi Provinsi dan Komoditas ini.")
