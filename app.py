@@ -56,8 +56,8 @@ if st.button("🔍 Prediksi Hasil Panen"):
     pred_ann = scaler.inverse_transform(pred_ann)[0][0]
 
     # Tampilkan hasil
-    st.success(f"🌳 Prediksi Produksi (Extra Trees): **{pred_xtr:,.2f} Ton**")
-    st.success(f"🧠 Prediksi Produksi (ANN): **{pred_ann:,.2f} Ton**")
+    st.success(f" Prediksi Produksi (Extra Trees): **{pred_xtr:,.2f} Ton**")
+    st.success(f" Prediksi Produksi (ANN): **{pred_ann:,.2f} Ton**")
 
     st.caption("Model dibuat menggunakan data tanaman pangan di Pulau Sumatera.")
 
