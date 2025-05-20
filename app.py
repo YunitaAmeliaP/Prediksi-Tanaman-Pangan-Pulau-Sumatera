@@ -397,7 +397,8 @@ plt.show()
 
 # Evualating Model
 
-XTree best from other model, so
+# XTree best from other model, so
+
 
 ###predicting the test set results
 print(np.concatenate((xtr_pred.reshape(len(xtr_pred),1), y_test.reshape(len(y_test),1)),1))
